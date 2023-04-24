@@ -1,0 +1,59 @@
+version: '3.1'
+
+services:
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    ports:
+      - ${DB_PORT}:${DB_PORT}
+    restart: always
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '0.0.0.0', '--silent']
+      interval: 10s
+      retries: 10
+      start_period: 10s
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASS}
+      - MYSQL_TCP_PORT=${DB_PORT}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASS}
+      - MYSQL_DATABASE=${DB_NAME}
+    volumes:
+      - swapi_volume:/var/lib/mysql
+    networks:
+      - swapi_network
+
+  swapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: swapi
+    container_name: swapi
+    command: sh -c "npm run migration:run && npm run seed:run && npm run start:prod"
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://swapi:${PORT}/api/health']
+      interval: 10s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      mysql:
+        condition: service_healthy
+      # test_mysql:
+      #   condition: service_healthy
+    restart: always
+    networks:
+      - swapi_network
+    links:
+      - mysql
+    ports:
+      - ${PORT}:${PORT}
+
+volumes:
+  swapi_volume:
+    name: swapi_volume
+    driver: local
+
+networks:
+  swapi_network:
+    name: swapi_network
+    driver: bridge

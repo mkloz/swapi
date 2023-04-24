@@ -1,0 +1,55 @@
+version: '3.1'
+
+services:
+  test_mysql:
+    container_name: test_mysql
+    image: mysql:8.0
+    ports:
+      - ${TEST_DB_PORT}:${TEST_DB_PORT}
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '0.0.0.0', '--silent']
+      interval: 10s
+      retries: 10
+      start_period: 10s
+    environment:
+      - MYSQL_ROOT_PASSWORD=${TEST_DB_PASS}
+      - MYSQL_TCP_PORT=${TEST_DB_PORT}
+      - MYSQL_USER=${TEST_DB_USER}
+      - MYSQL_PASSWORD=${TEST_DB_PASS}
+      - MYSQL_DATABASE=${TEST_DB_NAME}
+    networks:
+      - swapi_network
+
+  test_swapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: swapi
+    container_name: test_swapi
+    command: sh -c "npm run migration:run && npm run seed:run && npm run test && npm run start:prod"
+    environment:
+      - NODE_ENV=test
+      - PORT=3100
+      - AWS_S3_REGION=${AWS_S3_REGION}
+      - AWS_S3_ACCESS_KEY_ID=${AWS_S3_ACCESS_KEY_ID}
+      - AWS_S3_SECRET_ACCESS_KEY=${AWS_S3_SECRET_ACCESS_KEY}
+      - AWS_PUBLIC_BUCKET_NAME=${AWS_PUBLIC_BUCKET_NAME}
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://test_swapi:${PORT}/api/health']
+      interval: 10s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      test_mysql:
+        condition: service_healthy
+    networks:
+      - swapi_network
+    links:
+      - test_mysql
+    ports:
+      - ${PORT}:${PORT}
+
+networks:
+  swapi_network:
+    name: swapi_network
+    driver: bridge
